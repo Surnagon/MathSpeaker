@@ -16,8 +16,9 @@
  */
 typedef struct
 {
-   int number; /*!< Detected number */
-   int detection_time; /*!< Monotonic time at the detection instant */
+   unsigned number; /*!< Detected number */
+   	
+   clock_t clock; /*!< Monotonic time at the detection instant */
 }T_numrecog_info;
 
 /**
@@ -27,6 +28,7 @@ typedef struct
 {
    T_numrecog_info * buffer; /*!< The buffer of recognizied */
    unsigned size; /*!< The buffer size in number of recognitions */
+   unsigned count; /*!< Number recognitions in buffer */
    unsigned rd_pos; /*!< Position of next reading */
    unsigned wr_pos; /*!< Position of next writing */
    pthread_mutex_t lock; /*!< Mutex for safe access */
@@ -38,8 +40,12 @@ typedef struct
  */
 typedef struct
 {
-   int no_answere_timeout_ms; /*!< Timeout to consider the question not answered. */
-   int answere_timeout_ms; /*!< Timeout to consider the question answered */
+   unsigned partial /*!< Partial result */
+   unsigned last_place /*!< Place value of last recognition */
+   clock_t last_clock /*!< System clock of last recognition */
+   clock_t no_answere_timeout_clock; /*!< Timeout to consider the question not answered. */
+   clock_t answere_timeout_clock; /*!< Timeout to consider the question answered */
+   clock_t start_clock /*!< Clock count at the startting */
    T_numrecog_rbuffer rbuffer; /*!< Ring buffer of recognized numbers */
 }T_numrecog_cotext;
 
@@ -83,7 +89,7 @@ int numrecog_start( T_numrecog_cotext * arg_context_ptr,
  *
  */
 int * numrecog_read( T_numrecog_cotext * arg_context_ptr, 
-                     int * arg_stop);
+                     unsigned * arg_num_ptr);
 
 /**
  * @brief This function stops the voice-number recognition.
