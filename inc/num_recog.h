@@ -4,7 +4,9 @@
 #include <errno.h>
 #include <pthread.h>
 #include <time.h>
-
+#include <stdio.h>
+#include <stdbool.h>
+#include <errno.h>
 
 /** @file num_recog.h
  *  This file provides a interface for number recognition from voice.
@@ -40,13 +42,14 @@ typedef struct
  */
 typedef struct
 {
-   unsigned partial /*!< Partial result */
-   unsigned last_place /*!< Place value of last recognition */
-   clock_t last_clock /*!< System clock of last recognition */
+   unsigned partial; /*!< Partial result */
+   unsigned last_place; /*!< Place value of last recognition */
+   clock_t last_clock; /*!< System clock of last recognition */
    clock_t no_answere_timeout_clock; /*!< Timeout to consider the question not answered. */
    clock_t answere_timeout_clock; /*!< Timeout to consider the question answered */
-   clock_t start_clock /*!< Clock count at the startting */
+   clock_t start_clock; /*!< Clock count at the startting */
    T_numrecog_rbuffer rbuffer; /*!< Ring buffer of recognized numbers */
+   pthread_t thread_id;
 }T_numrecog_cotext;
 
 
@@ -83,13 +86,15 @@ int numrecog_start( T_numrecog_cotext * arg_context_ptr,
  *       This pointer must be previously configured by the function #numrecog_start. 
  *       See #T_numrecog_cotext.
  * @param[out] arg_num_ptr is the address of the variable that receives the recognized number.
+ * @param[out] arg_timeout_ptr points the the variable that receives logic value 'true' if the *       recognition has timed out with no detections. 
  *
  * @return This function returns the address arg_recog when a valid number has been 
  *         recognized, otherwise it returns NULL.
  *
  */
-int * numrecog_read( T_numrecog_cotext * arg_context_ptr, 
-                     unsigned * arg_num_ptr);
+unsigned * numrecog_read( T_numrecog_cotext * arg_context_ptr, 
+                          unsigned * arg_num_ptr,
+                          bool * arg_timeout_ptr );
 
 /**
  * @brief This function stops the voice-number recognition.

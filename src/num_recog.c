@@ -1,14 +1,123 @@
+
 #include "num_recog.h"
 #include <pthread.h>
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
+
+
+
+
+/**
+ * @brief This type defines the objecte that represents a number that
+ * may be recognized from a file.
+ *
+ * Only numbers writted with one word are detected from the file.
+ * The other numbers are composed by the read function #numrecog_read,
+ * by adding compatible numbers whose the time interval between their 
+ * detections are smaller than the confgured timeout.
+ */
+typedef struct
+{
+   unsigned value; /*!< Numeric value */
+   char * word; /*!< Number writted in one word. Number writted*/
+}T_numrecog;
+
+
+/** Array of supported numbers that may be recognized from the file */
+const T_numrecog numrecog_table[] =
+{
+   {.value = 100,	.word = "cem"},
+   {.value = 90,	.word = "noventa"},
+   {.value = 80,	.word = "oitenta"},
+   {.value = 70,	.word = "setenta"},
+   {.value = 60,	.word = "sessenta"},
+   {.value = 50,	.word = "cinquenta"},
+   {.value = 40,	.word = "quarenta"},
+   {.value = 30,	.word = "trinta"},
+   {.value = 20,	.word = "vinte"},
+   {.value = 19,	.word = "dozenove"},
+   {.value = 18,	.word = "dezoito"},
+   {.value = 17,	.word = "dezesete"},
+   {.value = 16,	.word = "dezeseis"},
+   {.value = 15,	.word = "quinze"},
+   {.value = 14,	.word = "quartoze"},
+   {.value = 13,	.word = "treze"},
+   {.value = 12,	.word = "doze"},
+   {.value = 11,	.word = "onze"},
+   {.value = 10,	.word = "dez"},
+   {.value = 9,	.word = "nove"},
+   {.value = 8,	.word = "oito"},
+   {.value = 7,	.word = "sete"},
+   {.value = 6,	.word = "seis"},
+   {.value = 5,	.word = "cinco"},
+   {.value = 4,	.word = "quatro"},
+   {.value = 3,	.word = "três"},
+   {.value = 2,	.word = "dois"},
+   {.value = 1,	.word = "um" }
+};
+
+/**
+ * @brief This function search for a number in words in a string.
+ *
+ * @param[in] arg_str is the string where the wrods are searched.
+ *
+ * @return[in] This function returns the pointer to the first
+ *        charecter after the detected number. 
+ *
+ * @note The numwords inside others words are ignored,
+ *       e.g the numword "sete" inside "setenta" is ignored.
+ */
+static char * numrecog_strscan(char * arg_str )
+{
+   char * scan;
+   unsigned scanlen;
+   char * winchar;
+   unsigned winlen;
+   unsigned winvalue;
+   int i;
+
+   for(i=0;i<(sizeof(numrecog_table)/sizeof(numrecog_table[0]));i++)
+   {
+      scan = strstr(arg_str,numrecog_table[i].word);
+      if(scan!=NULL)
+      {
+         scanlen = strlen(numrecog_table[i].word);
+         if(winchar!=NULL)
+         {
+            if(scan<winchar)
+            {
+               winchar = scan;
+            }
+            else
+            {
+               if((scan == winchar) && (scanlen>winlen))
+               {
+                  winchar = scan;
+                  winlen = scanlen;
+                  winvalue = numrecog_table[i].value;
+               }
+            }
+         }
+         else
+         {
+            winchar = scan;
+            winlen = scanlen;
+            winvalue = numrecog_table[i].value;
+         }
+      }
+   }
+
+   return (winchar + winlen);
+}
+
 
 /**
  * @brief This function is the routine of the recognition thread
  */
 static void * numrecog_task( void * arg)
 {
-	T_numrecog_cotext * context_ptr = (T_numrecog_cotext *)arg;
+   T_numrecog_cotext * context_ptr = (T_numrecog_cotext *)arg;
    /*
 #1 - Esperar evento no arquivo
 #2 - Le caracteres e detectar numeros 
@@ -16,6 +125,8 @@ static void * numrecog_task( void * arg)
 #4 - Preencher uma estrutura do tipo T_numrecog_info.
 #5 - Escreve a estrutura no buffer cricular utilizando a funcao numrecog_rb_write
    */
+   while(1)
+      printf("running");
 }
 
 
@@ -30,12 +141,11 @@ static unsigned numrecog_rb_count(T_numrecog_rbuffer * arg_rbuffer_ptr)
 {
    int count;
 
-   pthread_mutex_lock(arg_rbuffer_ptr->lock);
+   pthread_mutex_lock(&arg_rbuffer_ptr->lock);
    count = arg_rbuffer_ptr->count;
-   pthread_mutex_unlock(arg_rbuffer_ptr->lock);
+   pthread_mutex_unlock(&arg_rbuffer_ptr->lock);
    
    return count;
-   
 }
 
 /**
@@ -43,7 +153,7 @@ static unsigned numrecog_rb_count(T_numrecog_rbuffer * arg_rbuffer_ptr)
  *
  * @param[in] arg_rbuffer_ptr is the pointer to the ring buffer descriptor. See #T_numrecog_rbuffer.
  * @param[out] arg_recog_ptr is the pointer to the buffer that will receive the read symbols. See
-	 #T_numrecog_info.
+    #T_numrecog_info.
  * @param[in,out] arg_size_ptr points to the variable that informs the available size of the buffer
  *        arg_recog_ptr, and receives number of recognized read from the buffer to arg_recog_ptr.
  * 
@@ -57,34 +167,34 @@ static void numrecog_rb_read( T_numrecog_rbuffer * arg_rbuffer_ptr,
    int i;
 
    count = (int)(*arg_size_ptr);
-   pthread_mutex_lock(arg_rbuffer_ptr->lock);
+   pthread_mutex_lock(&arg_rbuffer_ptr->lock);
 
    if(count > arg_rbuffer_ptr->count)
    {
-	count = arg_rbuffer_ptr->count;
+   count = arg_rbuffer_ptr->count;
    }
 
    for(i=0;i<count;i++)
    {
-    	if(arg_recog_ptr != NULL)
+       if(arg_recog_ptr != NULL)
         {
-	   memcpy((void *)&arg_recog_ptr[i],
-	          (void *)&arg_rbuffer_ptr->buffer[arg_rbuffer_ptr->rd_pos],
-	           sizeof(T_numrecog_info));
-	}
+      memcpy((void *)&arg_recog_ptr[i],
+             (void *)&arg_rbuffer_ptr->buffer[arg_rbuffer_ptr->rd_pos],
+              sizeof(T_numrecog_info));
+   }
 
-	arg_rbuffer_ptr->rd_pos++;
+   arg_rbuffer_ptr->rd_pos++;
         arg_rbuffer_ptr->count--;
- 	
-	if( arg_rbuffer_ptr->rd_pos = arg_rbuffer_ptr->size )
-	{
-	   arg_rbuffer_ptr->rd_pos = 0;
-	 	
+    
+   if( arg_rbuffer_ptr->rd_pos = arg_rbuffer_ptr->size )
+   {
+      arg_rbuffer_ptr->rd_pos = 0;
+       
         }
    }   
-	
+   
 
-   pthread_mutex_unlock(arg_rbuffer_ptr->lock);
+   pthread_mutex_unlock(&arg_rbuffer_ptr->lock);
 
    *arg_size_ptr = count; 
 }
@@ -94,20 +204,20 @@ static void numrecog_rb_read( T_numrecog_rbuffer * arg_rbuffer_ptr,
  *
  * @param[in] arg_rbuffer_ptr is the pointer to the ring buffer descriptor. See #T_numrecog_rbuffer.
  * @param[out] arg_recog_ptr is the pointer to the buffer of symbols to be written into ring buffer. 
-	 See #T_numrecog_info.
+    See #T_numrecog_info.
  * @param[in,out] arg_size_ptr points to the variable that informs the size of arg_recog_ptr and 
  *       receives the number or recognitions actually writted.
  */
 static void numrecog_rb_write( T_numrecog_rbuffer * arg_rbuffer_ptr,
-			       T_numrecog_info * arg_recog_ptr,
-			       unsigned * arg_size_ptr )
+                               T_numrecog_info * arg_recog_ptr,
+                               unsigned * arg_size_ptr )
 {
    int count;
    int available;
    int i;
 
    count = (int)(*arg_size_ptr);
-   pthread_mutex_lock(arg_rbuffer_ptr->lock);
+   pthread_mutex_lock(&arg_rbuffer_ptr->lock);
    available = arg_rbuffer_ptr->size - arg_rbuffer_ptr->count;
    
    if(count > available)
@@ -117,20 +227,20 @@ static void numrecog_rb_write( T_numrecog_rbuffer * arg_rbuffer_ptr,
 
    for(i=0;i<count;i++)
    {
-      memcpy((void *)&arg_rbuffer_ptr->buffer[arg_rbuffer_ptr->wd_pos],
+      memcpy((void *)&arg_rbuffer_ptr->buffer[arg_rbuffer_ptr->wr_pos],
              (void *)&arg_recog_ptr[i],
              sizeof(T_numrecog_info));
       
-      arg_rbuffer_ptr->wd_pos++;
-      arg_rbuffer_ptr->count++;	
+      arg_rbuffer_ptr->wr_pos++;
+      arg_rbuffer_ptr->count++;   
       
-      if( arg_rbuffer_ptr->wd_pos = arg_rbuffer_ptr->size )
+      if( arg_rbuffer_ptr->wr_pos = arg_rbuffer_ptr->size )
       {
-         arg_rbuffer_ptr->wd_pos = 0;	
+         arg_rbuffer_ptr->wr_pos = 0;   
       }
    }   
-	
-   pthread_mutex_unlock(arg_rbuffer_ptr->lock);
+   
+   pthread_mutex_unlock(&arg_rbuffer_ptr->lock);
 
    *arg_size_ptr = count; 
 }
@@ -158,7 +268,7 @@ int numrecog_start( T_numrecog_cotext * arg_context_ptr,
    arg_context_ptr->no_answere_timeout_clock = 0;
    arg_context_ptr->answere_timeout_clock = 0;
 
-   ret= pthread_mutex_init(arg_context_ptr->rbuffer.lock,NULL);
+   ret= pthread_mutex_init(&arg_context_ptr->rbuffer.lock,NULL);
    if(ret)
    {
       printf("\r\n ERROR INITIATING THE MUTEXT FOR RING BUFFER ACCESS");
@@ -169,7 +279,7 @@ int numrecog_start( T_numrecog_cotext * arg_context_ptr,
    arg_context_ptr->rbuffer.size = arg_size;
 
    arg_context_ptr->no_answere_timeout_clock = ceil(((double)arg_timeout_ms)/CLOCKS_PER_SEC);
-   arg_context_ptr->answere_timeout_clock = ceil(((double)answere_timeout_ms)/CLOCKS_PER_SEC);
+   arg_context_ptr->answere_timeout_clock = ceil(((double)arg_num_timout_ms)/CLOCKS_PER_SEC);
    arg_context_ptr->start_clock = clock();
 
    // Creating the thread that catches the recognized numbers
@@ -195,7 +305,7 @@ int numrecog_start( T_numrecog_cotext * arg_context_ptr,
 /***************************************************************************************/
 unsigned * numrecog_read( T_numrecog_cotext * arg_context_ptr, 
                           unsigned * arg_num_ptr,
-                          bool * arg_timeout );
+                          bool * arg_timeout )
 {
    unsigned count;
    int i;
@@ -203,15 +313,15 @@ unsigned * numrecog_read( T_numrecog_cotext * arg_context_ptr,
    T_numrecog_info info;
    unsigned place;
    bool end;
-   	
+      
    if(arg_context_ptr == NULL)
-	return EFAULT;
+   return NULL;
 
    if(arg_num_ptr == NULL)
-	return EFAULT;
+   return NULL;
 
    if(arg_context_ptr->rbuffer.buffer == NULL)
-	return EFAULT;
+   return NULL;
 
    end = false;
 
@@ -228,38 +338,38 @@ unsigned * numrecog_read( T_numrecog_cotext * arg_context_ptr,
          {
             if((info.clock-arg_context_ptr->start_clock) <= arg_context_ptr->no_answere_timeout_clock)
             {
-                arg_context_ptr->partial = info.number;
-		arg_context_ptr->last_clock = info.clock;
-		arg_context_ptr->last_place = floor(log10(info.number));
-		if(info.number<20)
-                { 
-                   end = true;
-                   break;
-                }
+               arg_context_ptr->partial = info.number;
+               arg_context_ptr->last_clock = info.clock;
+               arg_context_ptr->last_place = floor(log10(info.number));
+               if(info.number<20)
+               { 
+                  end = true;
+                  break;
+               }
             }
          }
          else
          {
-	    if((info.clock-arg_context_ptr->last_clock) <= arg_context_ptr->answere_timeout_clock)
-	    {
-            	place = floor(log10(info.number));
-		if(place<arg_context_ptr->last_place)
-		{
-		   arg_context_ptr->partial += info.number;
-		   arg_context_ptr->last_clock = info.clock;
-		   arg_context_ptr->last_place = place;
-		}
-		else
-		{
-                   end = true;
-	           break;
-                }
+            if((info.clock-arg_context_ptr->last_clock) <= arg_context_ptr->answere_timeout_clock)
+            {
+               place = floor(log10(info.number));
+               if(place<arg_context_ptr->last_place)
+               {
+                  arg_context_ptr->partial += info.number;
+                  arg_context_ptr->last_clock = info.clock;
+                  arg_context_ptr->last_place = place;
+               }
+               else
+               {
+                  end = true;
+                  break;
+               }
 
-	        if(info.number<20)
-		{
-		   end =  true;
-		   break;
-		}    
+               if(info.number<20)
+               {
+                  end =  true;
+                  break;
+               }    
             }
          }
       }
@@ -274,10 +384,11 @@ unsigned * numrecog_read( T_numrecog_cotext * arg_context_ptr,
    }
    else
    {
-  	if(arg_timeout != NULL)
+     if(arg_timeout != NULL)
         {
            *arg_timeout = 
-              (clock()-arg_context_ptr->start_clock) > arg_context_ptr->no_answere_timeout_clock 
+              (clock()-arg_context_ptr->start_clock) > 
+              arg_context_ptr->no_answere_timeout_clock;
         } 
    }
  
@@ -307,4 +418,3 @@ unsigned * numrecog_read( T_numrecog_cotext * arg_context_ptr,
 
 
 
-}
