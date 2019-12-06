@@ -49,9 +49,11 @@ typedef struct
    clock_t start_clock; /*!< Clock count at the startting */
    T_numrecog_rbuffer rbuffer; /*!< Ring buffer of recognized numbers */
    pthread_t thread_id; /*!< Id of scanning thread */
-   FILE * scan_file; /*!< Desriptor of scanned file */
+   int scan_file; /*!< Desriptor of scanned file */
+   const char * scan_file_name; /*!< Absolute path of scanned file */
    char * charbuffer; /*!< buffer available to receive chars from scanned file */
    unsigned charlen; /*!< Size of charbuffer */
+   unsigned charpos; /*!< Write position of charbuffer */
 }T_numrecog_cotext;
 
 
