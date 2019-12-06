@@ -3,6 +3,21 @@
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <fcntl.h>
+
+
+//#define DBG_ENABLE
+
+#ifdef DBG_ENABLE
+#define printdbg(frm,...) printf(frm,##__VA_ARGS__)
+#else
+#define printdbg(frm,...) do{}while(0)
+#endif
+
+/** length of string kept to concatenate with next file read. */
+#define NUMRECOG_KEPT_LENGTH (sizeof("cinquenta"))
 
 /**
  * @brief This type defines the objecte that represents a number that
@@ -68,7 +83,7 @@ const T_numrecog numrecog_table[] =
  * @note The numwords inside others words are ignored,
  *       e.g the numword "sete" inside "setenta" is ignored.
  */
-static char * numrecog_strscan(char * arg_str, unsigned * arg_value_ptr )
+static char * numrecog_strscan(char * arg_str,unsigned * arg_value_ptr )
 {
    char * scan;
    unsigned scanlen;
@@ -89,7 +104,7 @@ static char * numrecog_strscan(char * arg_str, unsigned * arg_value_ptr )
          //-It is the first number detected in the scan.
          //-It comes first in the scanned string than the winner detection.
          //-It starts in the same character that the winner detection and it has a larger length.
-         if((winchar!=NULL)||(scan<winchar)||((scan==winchar)&&(scanlen>winlen)))
+         if((winchar==NULL)||(scan<winchar)||((scan==winchar)&&(scanlen>winlen)))
          {
             winchar = scan;
             winlen = scanlen;
@@ -109,24 +124,6 @@ static char * numrecog_strscan(char * arg_str, unsigned * arg_value_ptr )
       return NULL;
    }
 }
-
-/**
- * @brief This function is the routine of the recognition thread
- */
-static void * numrecog_task( void * arg)
-{
-   T_numrecog_cotext * context_ptr = (T_numrecog_cotext *)arg;
-   /*
-#1 - Esperar evento no arquivo
-#2 - Le caracteres e detectar numeros 
-#3 - Quando um numero for detectado utilize a funcao clock() para pegar o instante de deteccao
-#4 - Preencher uma estrutura do tipo T_numrecog_info.
-#5 - Escreve a estrutura no buffer cricular utilizando a funcao numrecog_rb_write
-   */
-   while(1)
-      printf("running");
-}
-
 
 /**
  * @brief This function reads the number of recognitions into the ring buffer
@@ -169,26 +166,26 @@ static void numrecog_rb_read( T_numrecog_rbuffer * arg_rbuffer_ptr,
 
    if(count > arg_rbuffer_ptr->count)
    {
-   count = arg_rbuffer_ptr->count;
+      count = arg_rbuffer_ptr->count;
    }
 
    for(i=0;i<count;i++)
    {
        if(arg_recog_ptr != NULL)
         {
-      memcpy((void *)&arg_recog_ptr[i],
-             (void *)&arg_rbuffer_ptr->buffer[arg_rbuffer_ptr->rd_pos],
-              sizeof(T_numrecog_info));
-   }
+          memcpy((void *)&arg_recog_ptr[i],
+                (void *)&arg_rbuffer_ptr->buffer[arg_rbuffer_ptr->rd_pos],
+                 sizeof(T_numrecog_info));
+        }
 
-   arg_rbuffer_ptr->rd_pos++;
+        arg_rbuffer_ptr->rd_pos++;
         arg_rbuffer_ptr->count--;
     
-   if( arg_rbuffer_ptr->rd_pos = arg_rbuffer_ptr->size )
-   {
-      arg_rbuffer_ptr->rd_pos = 0;
+      if( arg_rbuffer_ptr->rd_pos == arg_rbuffer_ptr->size )
+      {
+          arg_rbuffer_ptr->rd_pos = 0;
        
-        }
+      }
    }   
    
 
@@ -232,7 +229,7 @@ static void numrecog_rb_write( T_numrecog_rbuffer * arg_rbuffer_ptr,
       arg_rbuffer_ptr->wr_pos++;
       arg_rbuffer_ptr->count++;   
       
-      if( arg_rbuffer_ptr->wr_pos = arg_rbuffer_ptr->size )
+      if( arg_rbuffer_ptr->wr_pos == arg_rbuffer_ptr->size )
       {
          arg_rbuffer_ptr->wr_pos = 0;   
       }
@@ -242,6 +239,96 @@ static void numrecog_rb_write( T_numrecog_rbuffer * arg_rbuffer_ptr,
 
    *arg_size_ptr = count; 
 }
+
+/**
+ * @brief This function is the routine of the recognition thread
+ */
+static void * numrecog_task( void * arg)
+{
+   T_numrecog_cotext * context_ptr = (T_numrecog_cotext *)arg;
+   int size;
+   int shift;
+   unsigned value;
+   char *scan;
+   T_numrecog_info info;
+   unsigned infosize;
+
+   printdbg("\r\n scanning task");
+   context_ptr->scan_file = open(context_ptr->scan_file_name,O_RDONLY);
+   printdbg("\r\n mkfifo openned");
+
+   if(context_ptr->scan_file==-1)
+   {
+      printf("\r\n Error opening the fifo %d",errno);
+      return NULL;
+   }
+
+   while(1)
+   {
+      size = read(context_ptr->scan_file,
+                  &context_ptr->charbuffer[context_ptr->charpos],
+                  context_ptr->charlen-context_ptr->charpos); 
+      if(size==-1)
+      {
+         printf("\r\n Error reading %d",errno);
+         return NULL;
+      }
+
+
+      if(size == 0)
+      {
+         printdbg("\r\n End of file");
+         close(context_ptr->scan_file);
+         context_ptr->scan_file = 
+            open(context_ptr->scan_file_name,O_RDONLY);
+      }
+      else
+      {
+         printdbg("\r\n Data received %.*s",size,
+                &context_ptr->charbuffer[context_ptr->charpos]);
+         context_ptr->charpos += size;
+
+         scan =  context_ptr->charbuffer;
+         shift = 0;
+         while((scan>=context_ptr->charbuffer)&&(scan<(context_ptr->charbuffer+context_ptr->charpos)))
+         {
+            scan = numrecog_strscan(scan,&value);
+            if(scan!=NULL)
+            { 
+               info.number = value;
+               info.clock = clock();  
+               infosize = 1;
+
+               numrecog_rb_write(&context_ptr->rbuffer,&info,&infosize);
+               if(size==0)
+               {
+                  printf("\r\n Error: Ring buffer is full");
+               }
+               printdbg("\r\n Ring buffer count is %d", numrecog_rb_count(&context_ptr->rbuffer));
+               shift = (scan-context_ptr->charbuffer);
+               printdbg("\r\n Reconhecido o numero %d do buffer %.*s",
+                      value, context_ptr->charpos,context_ptr->charbuffer);
+            }
+         }
+
+         if(shift<(context_ptr->charpos-NUMRECOG_KEPT_LENGTH))
+         {
+            shift = context_ptr->charpos-NUMRECOG_KEPT_LENGTH;
+         }
+
+         printdbg("\r\n shift %d %d %lu", shift, context_ptr->charpos,NUMRECOG_KEPT_LENGTH); 
+         if(shift>0)
+         {
+            context_ptr->charpos -= shift;
+            memmove((void *)context_ptr->charbuffer,
+                    (void *)&context_ptr->charbuffer[shift],
+                    context_ptr->charpos);
+         }
+      }
+   }
+}
+
+
 
 /***************************************************************************************/
 int numrecog_start( T_numrecog_cotext * arg_context_ptr,
@@ -264,17 +351,30 @@ int numrecog_start( T_numrecog_cotext * arg_context_ptr,
    arg_context_ptr->rbuffer.count = 0;
    arg_context_ptr->rbuffer.size = 0;
    arg_context_ptr->rbuffer.buffer = NULL;
-   arg_context_ptr->scan_file = NULL;
+   arg_context_ptr->scan_file = -1;
+   arg_context_ptr->scan_file_name = NULL;
    arg_context_ptr->charbuffer = NULL;
    arg_context_ptr->charlen = 0;
+   arg_context_ptr->charpos = 0;
    arg_context_ptr->partial = 0;
    arg_context_ptr->last_clock = 0;
    arg_context_ptr->no_answere_timeout_clock = 0;
    arg_context_ptr->answere_timeout_clock = 0;
 
-   arg_context_ptr->scan_file = fopen(arg_file_str,"r");
-   if(arg_context_ptr->scan_file==NULL)
-      return errno;
+
+   // Creat the named pipe if it does not exist
+   if(access(arg_file_str,F_OK)==-1)
+   {
+      if(mkfifo(arg_file_str,S_IRUSR | S_IWUSR)<0)
+      {
+         printf("\r\n Error creating named pipe %s: %d",arg_file_str,errno);
+         return errno;
+      }
+   }
+   else
+   {
+      read
+   }
 
    ret= pthread_mutex_init(&arg_context_ptr->rbuffer.lock,NULL);
    if(ret)
@@ -286,12 +386,13 @@ int numrecog_start( T_numrecog_cotext * arg_context_ptr,
    arg_context_ptr->rbuffer.buffer = arg_buffer;
    arg_context_ptr->rbuffer.size = arg_size;
    arg_context_ptr->no_answere_timeout_clock = 
-      ceil(((double)arg_timeout_ms)/CLOCKS_PER_SEC);
+      ceil(((double)arg_timeout_ms*0.001)*CLOCKS_PER_SEC);
    arg_context_ptr->answere_timeout_clock = 
-      ceil(((double)arg_num_timout_ms)/CLOCKS_PER_SEC);
+      ceil(((double)arg_num_timout_ms*0.001)*CLOCKS_PER_SEC);
    arg_context_ptr->start_clock = clock();
    arg_context_ptr->charbuffer = arg_charbuffer_ptr;
    arg_context_ptr->charlen = arg_charlen;
+   arg_context_ptr->scan_file_name = arg_file_str;
 
 
    // Creating the thread that catches the recognized numbers
@@ -306,9 +407,11 @@ int numrecog_start( T_numrecog_cotext * arg_context_ptr,
       arg_context_ptr->rbuffer.count = 0;
       arg_context_ptr->rbuffer.size = 0;
       arg_context_ptr->rbuffer.buffer = NULL;
-      arg_context_ptr->scan_file = NULL;
+      arg_context_ptr->scan_file = -1;
+      arg_context_ptr->scan_file_name = NULL;
       arg_context_ptr->charbuffer = NULL;
       arg_context_ptr->charlen = 0;
+      arg_context_ptr->charpos = 0;
       arg_context_ptr->partial = 0;
       arg_context_ptr->last_clock = 0;
       arg_context_ptr->no_answere_timeout_clock = 0;
@@ -347,8 +450,9 @@ unsigned * numrecog_read( T_numrecog_cotext * arg_context_ptr,
 
    // Get the counting of pending recognitions. 
    count = numrecog_rb_count(&arg_context_ptr->rbuffer);
-   for(i=0;i++;i<count)
+   for(i=0;i<count;i++)
    {
+      printdbg("\r\n %d %d", i, count);
       size = 1;
       // Get recognition from ring buffer
       numrecog_rb_read(&arg_context_ptr->rbuffer,&info,&size);
