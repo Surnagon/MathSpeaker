@@ -1,12 +1,8 @@
-
 #include "num_recog.h"
 #include <pthread.h>
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
-
-
-
 
 /**
  * @brief This type defines the objecte that represents a number that
@@ -58,17 +54,21 @@ const T_numrecog numrecog_table[] =
 };
 
 /**
- * @brief This function search for a number in words in a string.
+ * @brief This function searches for a number in words in a string.
  *
  * @param[in] arg_str is the string where the wrods are searched.
+ * @param[out] arg_value_ptr points to the variable that receives the
+ *       recognized number. If no number is recognized it receives
+ *       #UINT_MAX
  *
  * @return[in] This function returns the pointer to the first
  *        charecter after the detected number. 
  *
+ * 
  * @note The numwords inside others words are ignored,
  *       e.g the numword "sete" inside "setenta" is ignored.
  */
-static char * numrecog_strscan(char * arg_str )
+static char * numrecog_strscan(char * arg_str, unsigned * arg_value_ptr )
 {
    char * scan;
    unsigned scanlen;
@@ -77,29 +77,19 @@ static char * numrecog_strscan(char * arg_str )
    unsigned winvalue;
    int i;
 
+   winchar = NULL;
+
    for(i=0;i<(sizeof(numrecog_table)/sizeof(numrecog_table[0]));i++)
    {
       scan = strstr(arg_str,numrecog_table[i].word);
       if(scan!=NULL)
       {
          scanlen = strlen(numrecog_table[i].word);
-         if(winchar!=NULL)
-         {
-            if(scan<winchar)
-            {
-               winchar = scan;
-            }
-            else
-            {
-               if((scan == winchar) && (scanlen>winlen))
-               {
-                  winchar = scan;
-                  winlen = scanlen;
-                  winvalue = numrecog_table[i].value;
-               }
-            }
-         }
-         else
+         //The current detection wins the scan if:
+         //-It is the first number detected in the scan.
+         //-It comes first in the scanned string than the winner detection.
+         //-It starts in the same character that the winner detection and it has a larger length.
+         if((winchar!=NULL)||(scan<winchar)||((scan==winchar)&&(scanlen>winlen)))
          {
             winchar = scan;
             winlen = scanlen;
@@ -107,10 +97,18 @@ static char * numrecog_strscan(char * arg_str )
          }
       }
    }
-
-   return (winchar + winlen);
+   
+   if(winchar!=NULL)
+   {
+      *arg_value_ptr = winvalue;
+      return (winchar + winlen);
+   }
+   else
+   {
+      *arg_value_ptr = UINT_MAX;
+      return NULL;
+   }
 }
-
 
 /**
  * @brief This function is the routine of the recognition thread
@@ -250,11 +248,15 @@ int numrecog_start( T_numrecog_cotext * arg_context_ptr,
                     int arg_timeout_ms,
                     int arg_num_timout_ms,
                     T_numrecog_info * arg_buffer,
-                    unsigned arg_size )
+                    unsigned arg_size,
+                    const char * arg_file_str,
+                    char * arg_charbuffer_ptr,
+                    unsigned arg_charlen )
+
 {
    int ret;
 
-   if(arg_context_ptr == NULL)
+   if((arg_context_ptr == NULL)||(arg_buffer==NULL)||(arg_charbuffer_ptr==NULL))
       return EFAULT;
 
    arg_context_ptr->rbuffer.wr_pos = 0;
@@ -262,11 +264,17 @@ int numrecog_start( T_numrecog_cotext * arg_context_ptr,
    arg_context_ptr->rbuffer.count = 0;
    arg_context_ptr->rbuffer.size = 0;
    arg_context_ptr->rbuffer.buffer = NULL;
-
+   arg_context_ptr->scan_file = NULL;
+   arg_context_ptr->charbuffer = NULL;
+   arg_context_ptr->charlen = 0;
    arg_context_ptr->partial = 0;
    arg_context_ptr->last_clock = 0;
    arg_context_ptr->no_answere_timeout_clock = 0;
    arg_context_ptr->answere_timeout_clock = 0;
+
+   arg_context_ptr->scan_file = fopen(arg_file_str,"r");
+   if(arg_context_ptr->scan_file==NULL)
+      return errno;
 
    ret= pthread_mutex_init(&arg_context_ptr->rbuffer.lock,NULL);
    if(ret)
@@ -277,10 +285,14 @@ int numrecog_start( T_numrecog_cotext * arg_context_ptr,
 
    arg_context_ptr->rbuffer.buffer = arg_buffer;
    arg_context_ptr->rbuffer.size = arg_size;
-
-   arg_context_ptr->no_answere_timeout_clock = ceil(((double)arg_timeout_ms)/CLOCKS_PER_SEC);
-   arg_context_ptr->answere_timeout_clock = ceil(((double)arg_num_timout_ms)/CLOCKS_PER_SEC);
+   arg_context_ptr->no_answere_timeout_clock = 
+      ceil(((double)arg_timeout_ms)/CLOCKS_PER_SEC);
+   arg_context_ptr->answere_timeout_clock = 
+      ceil(((double)arg_num_timout_ms)/CLOCKS_PER_SEC);
    arg_context_ptr->start_clock = clock();
+   arg_context_ptr->charbuffer = arg_charbuffer_ptr;
+   arg_context_ptr->charlen = arg_charlen;
+
 
    // Creating the thread that catches the recognized numbers
    ret = pthread_create(&arg_context_ptr->thread_id,
@@ -289,8 +301,16 @@ int numrecog_start( T_numrecog_cotext * arg_context_ptr,
                         (void*)arg_context_ptr);
    if(ret)
    {
-      arg_context_ptr->rbuffer.buffer = NULL;
+      arg_context_ptr->rbuffer.wr_pos = 0;
+      arg_context_ptr->rbuffer.rd_pos = 0;
+      arg_context_ptr->rbuffer.count = 0;
       arg_context_ptr->rbuffer.size = 0;
+      arg_context_ptr->rbuffer.buffer = NULL;
+      arg_context_ptr->scan_file = NULL;
+      arg_context_ptr->charbuffer = NULL;
+      arg_context_ptr->charlen = 0;
+      arg_context_ptr->partial = 0;
+      arg_context_ptr->last_clock = 0;
       arg_context_ptr->no_answere_timeout_clock = 0;
       arg_context_ptr->answere_timeout_clock = 0;
       printf("\r\n ERROR: THE THREAD CREATION FAILS : %d", ret);

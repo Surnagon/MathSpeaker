@@ -3,7 +3,7 @@ CC=gcc
 RM = rm -rf
 TARGET = mathspeaker
 ODIR = ./obj/x86_64
-CFLAGS =  -I$(IDIR)  -D ARCH_ARM_CORTEX_AX -pg
+CFLAGS =  -I$(IDIR)  -D ARCH_ARM_CORTEX_AX -pg -g3
 SRCTOPDIR = ./src
 
 SRC += $(SRCTOPDIR)/num_recog.c

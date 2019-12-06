@@ -4,12 +4,19 @@
 int main()
 {
    unsigned result;
-        bool timeout;
+   bool timeout;
+   char charbuffer[124];
+   int ret;
 
    T_numrecog_cotext context;
    T_numrecog_info buffer[10];
 
-   numrecog_start(&context,10,1,buffer,10);
+   ret = numrecog_start(&context,10,1,buffer,10,"/home/z/MathSpeaker/recogfile",
+                        charbuffer,sizeof(charbuffer));
+   if(ret)
+   {
+      printf("\r\n Erro ao iniciar");
+   }
 
    if( NULL != numrecog_read(&context,&result,&timeout))
    {
