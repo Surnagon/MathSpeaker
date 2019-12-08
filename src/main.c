@@ -14,7 +14,7 @@ int main()
 
    do
    {
-   ret = numrecog_start(&context,5000,1000,buffer,10,"/home/z/MathSpeaker/recogfile",
+      ret = numrecog_start(&context,5000,1000,buffer,10,"recogfile",
                         charbuffer,sizeof(charbuffer));
    if(ret)
    {
@@ -28,7 +28,8 @@ int main()
       rd = numrecog_read(&context,&result,&timeout);
       if(rd!=NULL)
       {
-          printf("\r\n o valor reconhecido foi %d", result);
+           printf("\r\n o valor reconhecido foi %d", result);
+           printf("\r\n");
            break;
       }
       else

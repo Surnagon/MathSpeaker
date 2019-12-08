@@ -270,8 +270,7 @@ static void * numrecog_task( void * arg)
                   context_ptr->charlen-context_ptr->charpos); 
       if(size==-1)
       {
-         printf("\r\n Error reading %d",errno);
-         return NULL;
+         continue;
       }
 
 
@@ -370,10 +369,6 @@ int numrecog_start( T_numrecog_cotext * arg_context_ptr,
          printf("\r\n Error creating named pipe %s: %d",arg_file_str,errno);
          return errno;
       }
-   }
-   else
-   {
-      read
    }
 
    ret= pthread_mutex_init(&arg_context_ptr->rbuffer.lock,NULL);
