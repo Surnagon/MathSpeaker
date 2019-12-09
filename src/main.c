@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <time.h>
 #include "num_recog.h"
 
 int main()
@@ -22,8 +23,52 @@ int main()
       return 0;
    }
 
-   timeout =  false;
-   while(!timeout)
+   result = 0
+   /*result = calc_gen()*/
+   srand(time(NULL));   // Initialization, should only be called once.
+   
+   int oper_select, a, b;
+   
+   oper_select = ceil(rand()*4)
+
+   select = 0
+
+   switch(oper_select)
+   {
+      case 1:
+         a = ceil(rand()*10)
+         b = ceil(rand()*10)
+         select = a+b
+         break;
+      case 2:
+         do
+         {
+         a = ceil(rand()*10)
+         b = ceil(rand()*10)
+         }while(a < b)
+         select = a-b
+         break;
+      case 3:
+         a = ceil(rand()*10)
+         b = ceil(rand()*10)
+         select = a*b
+         break;
+      case 4:
+         do
+         {
+         a = ceil(rand()*10)
+         b = ceil(rand()*10)
+         }while(a%b != 0)
+         select = a/b
+         break;
+      default:
+         printf("\r\n opcao invalida %d", result);
+         printf("\r\n");
+         break;
+   }
+
+   timeout = false;
+   while(!timeout && select == 0)
    {
       rd = numrecog_read(&context,&result,&timeout);
       if(rd!=NULL)
