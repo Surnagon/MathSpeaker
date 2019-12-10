@@ -1,10 +1,10 @@
 #include <stdlib.h>
-#include <time.h>
 #include "num_recog.h"
+#include "calc_gen.h"
 
 int main()
 {
-   unsigned result;
+   unsigned result = 0, select = 0;
    bool timeout;
    char charbuffer[124];
    int ret;
@@ -23,59 +23,29 @@ int main()
       return 0;
    }
 
-   result = 0
-   /*result = calc_gen()*/
-   srand(time(NULL));   // Initialization, should only be called once.
-   
-   int oper_select, a, b;
-   
-   oper_select = ceil(rand()*4)
+   select = calc_gen();
 
-   select = 0
-
-   switch(oper_select)
-   {
-      case 1:
-         a = ceil(rand()*10)
-         b = ceil(rand()*10)
-         select = a+b
-         break;
-      case 2:
-         do
-         {
-         a = ceil(rand()*10)
-         b = ceil(rand()*10)
-         }while(a < b)
-         select = a-b
-         break;
-      case 3:
-         a = ceil(rand()*10)
-         b = ceil(rand()*10)
-         select = a*b
-         break;
-      case 4:
-         do
-         {
-         a = ceil(rand()*10)
-         b = ceil(rand()*10)
-         }while(a%b != 0)
-         select = a/b
-         break;
-      default:
-         printf("\r\n opcao invalida %d", result);
-         printf("\r\n");
-         break;
-   }
+//   printf("\n operacao = %d \n", oper_select);
 
    timeout = false;
-   while(!timeout && select == 0)
+   do
    {
       rd = numrecog_read(&context,&result,&timeout);
       if(rd!=NULL)
       {
-           printf("\r\n o valor reconhecido foi %d", result);
-           printf("\r\n");
-           break;
+         printf("\r\n %d, certo?", result);
+         printf("\r\n");
+         if(result == select)
+         {
+            printf("\r\n PARABENS!!! \n Voce acertou!");
+            printf("\r\n");
+         }
+         else
+         {
+            printf("\r\n Que pena. Voce errou. A resposta correta era %d", select);
+            printf("\r\n");
+         }
+         break;
       }
       else
       {
@@ -89,6 +59,9 @@ int main()
          }
       }
    }
-   }while(1);
+   while(!timeout && select == 0);
+   }
+   while(1);
+
    return 0;
 }
